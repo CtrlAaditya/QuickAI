@@ -171,3 +171,5 @@ export const dummyPublishedCreationData = [
         "__v": 1
     },
 ]
+// Alias export so Community.jsx works without changing it
+export const dummyPublishedCreationsData = dummyPublishedCreationData;
