@@ -1,32 +1,29 @@
+import 'dotenv/config'; // must be first
 import express from 'express';
 import cors from 'cors';
-import 'dotenv/config';
 import { clerkMiddleware, requireAuth } from '@clerk/express';
+import aiRouter from './routes/aiRoutes.js';
 
 const app = express();
 
-// Enable CORS
 app.use(cors());
-
-// Parse JSON bodies
 app.use(express.json());
-
-// Clerk middleware for authentication
 app.use(clerkMiddleware());
 
-// Root route
-app.get('/', (req, res) => {
-    res.send("Server is Live !");
+// Debug middleware to log all incoming requests
+app.use((req, res, next) => {
+  console.log(`[${req.method}] ${req.url}`);
+  next();
 });
 
-// Example of a protected route using requireAuth
-app.get('/protected', requireAuth(), (req, res) => {
-    res.send("You have accessed a protected route!");
-});
+// Root route - open to everyone (no auth required)
+app.get('/', (req, res) => res.send('Server is Live!'));
+
+// Protect all /api/ai routes with authentication
+app.use('/api/ai', requireAuth(), aiRouter);
 
 const PORT = process.env.PORT || 3000;
 
-// Start server
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+  console.log('Server is running on port', PORT);
 });
