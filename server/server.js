@@ -1,14 +1,17 @@
 import 'dotenv/config'; // must be first
 import express from 'express';
 import cors from 'cors';
-import { clerkMiddleware, requireAuth } from '@clerk/express';
 import aiRouter from './routes/aiRoutes.js';
+import connectCloudinary from './configs/cloudinary.js';
 
 const app = express();
 
+// Connect to Cloudinary
+await connectCloudinary();
+
+// Middleware
 app.use(cors());
 app.use(express.json());
-app.use(clerkMiddleware());
 
 // Debug middleware to log all incoming requests
 app.use((req, res, next) => {
@@ -16,14 +19,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// Root route - open to everyone (no auth required)
-app.get('/', (req, res) => res.send('Server is Live!'));
+// Root route - open to everyone
+app.get('/', (req, res) => res.send('🚀 Server is Live!'));
 
-// Protect all /api/ai routes with authentication
-app.use('/api/ai', requireAuth(), aiRouter);
+// Mount AI routes (no auth for now)
+app.use('/api/ai', aiRouter);
 
+// Start server
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
-  console.log('Server is running on port', PORT);
+  console.log(`✅ Server running on http://localhost:${PORT}`);
 });
