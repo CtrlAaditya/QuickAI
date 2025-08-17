@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import aiRouter from './routes/aiRoutes.js';
 import connectCloudinary from './configs/cloudinary.js';
+import userRouter from './routes/userRoutes.js';
 
 const app = express();
 
@@ -24,6 +25,8 @@ app.get('/', (req, res) => res.send('🚀 Server is Live!'));
 
 // Mount AI routes (no auth for now)
 app.use('/api/ai', aiRouter);
+
+app.use('/api/user', userRouter);
 
 // Start server
 const PORT = process.env.PORT || 3000;
