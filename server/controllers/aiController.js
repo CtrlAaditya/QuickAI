@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import sql from "../configs/db.js";
 import clerkClient from '@clerk/clerk-sdk-node';
 import axios from "axios";
+import { getAuth } from "@clerk/express";
 import {v2 as cloudinary} from "cloudinary";
 import fs from "fs";
 import { Buffer } from 'buffer'; // Needed for Node.js ES Modules to handle binary data
@@ -102,13 +103,18 @@ export const generateBlogTitle = async (req, res) => {
 
 export const generateImage = async (req, res) => {
     try {
+        // Match the same usage as generateArticle
         const { userId } = req.auth();
-        const { prompt, publish } = req.body;
-        const plan = req.plan; // Keep plan check to ensure user is premium
+        const { prompt } = req.body;
+        const plan = req.plan;
 
-        // If image generation is strictly for premium users, enforce it here.
+        console.log("🟢 generateImage -> userId:", userId, "plan:", plan);
+
         if (plan !== 'premium') {
-            return res.status(403).json({ success: false, message: "Image generation is a premium feature. Please upgrade your plan." });
+            return res.status(403).json({
+                success: false,
+                message: "Image generation is a premium feature. Please upgrade your plan."
+            });
         }
 
         const FormData = new (await import("form-data")).default();
@@ -118,7 +124,10 @@ export const generateImage = async (req, res) => {
             "https://clipdrop-api.co/text-to-image/v1",
             FormData,
             {
-                headers: { "x-api-key": process.env.CLIPDROP_API_KEY, ...FormData.getHeaders() },
+                headers: {
+                    "x-api-key": process.env.CLIPDROP_API_KEY,
+                    ...FormData.getHeaders()
+                },
                 responseType: "arraybuffer",
             }
         );
@@ -126,21 +135,25 @@ export const generateImage = async (req, res) => {
         const base64Image = `data:image/png;base64,${Buffer.from(data, "binary").toString("base64")}`;
         const { secure_url } = await cloudinary.uploader.upload(base64Image);
 
-        await sql`INSERT INTO creations (user_id, prompt, content, type)
-                  VALUES (${userId}, ${prompt}, ${secure_url}, 'image')`;
-
-        // Removed free_usage increment as this function is for premium users only.
-        // If there's a separate premium usage counter, you'd add that logic here.
+        await sql`
+          INSERT INTO creations (user_id, prompt, content, type)
+          VALUES (${userId}, ${prompt}, ${secure_url}, 'image')
+        `;
 
         res.json({ success: true, content: secure_url });
 
     } catch (error) {
         console.error("Error in generateImage:", error);
+
         if (axios.isAxiosError(error) && error.response) {
-            const clipDropErrorData = error.response.data ? Buffer.from(error.response.data).toString('utf8') : 'Unknown error from external API';
+            const clipDropErrorData = error.response.data
+                ? Buffer.from(error.response.data).toString('utf8')
+                : 'Unknown error from external API';
+
             console.error("ClipDrop API Error Response:", clipDropErrorData);
 
             let message = `Image generation failed: ${error.response.statusText || 'External API Error'}.`;
+
             try {
                 const parsedClipDropError = JSON.parse(clipDropErrorData);
                 if (parsedClipDropError.error) {
@@ -159,6 +172,8 @@ export const generateImage = async (req, res) => {
         }
     }
 };
+
+
 
 
 

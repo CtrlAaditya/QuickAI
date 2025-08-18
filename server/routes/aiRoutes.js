@@ -1,7 +1,7 @@
 import express from "express";
 import { generateArticle, generateBlogTitle, generateImage, removeImageBackground, removeImageObject, resumeReview } from "../controllers/aiController.js";
 import { requireAuth } from '@clerk/express'; // ✅ only this is needed
-import { auth } from "../middlewares/auth.js"; // your custom middleware
+import { auth } from "../middleware/auth.js";
 import { upload } from "../configs/multer.js";
 
 const aiRouter = express.Router();
