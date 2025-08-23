@@ -1,8 +1,8 @@
 import express from "express";
 import { generateArticle, generateBlogTitle, generateImage, removeImageBackground, removeImageObject, resumeReview } from "../controllers/aiController.js";
-import { requireAuth } from '@clerk/express'; // ✅ only this is needed
+import { requireAuth } from '@clerk/express';
 import { auth } from "../middleware/auth.js";
-import { upload } from "../configs/multer.js";
+import { upload } from "../configs/multer.js"; // Import your multer middleware
 
 const aiRouter = express.Router();
 
@@ -12,12 +12,11 @@ aiRouter.get("/test", (req, res) => {
   res.json({ message: "AI Router is working" });
 });
 
-// Clerk auth first, then your custom auth
 aiRouter.post("/generate-article", requireAuth(), auth, generateArticle);
 aiRouter.post("/generate-blog-title", requireAuth(), auth, generateBlogTitle);
 aiRouter.post("/generate-image", requireAuth(), auth, generateImage);
-aiRouter.post("/remove-image-background", requireAuth(), upload.single('image'), auth, removeImageBackground);
-aiRouter.post("/remove-image-object", requireAuth(), upload.single('image'), auth, removeImageObject);
-aiRouter.post("/resume-review", requireAuth(), upload.single('file'), auth, resumeReview);
+aiRouter.post("/remove-image-background", requireAuth(), auth, upload.single('image'), removeImageBackground); // <-- Add multer middleware here
+aiRouter.post("/remove-image-object", requireAuth(), auth, upload.single('image'), removeImageObject); // <-- Add multer middleware here
+aiRouter.post("/resume-review", requireAuth(), auth, upload.single('resume'), resumeReview); // <-- Add multer middleware here
 
 export default aiRouter;

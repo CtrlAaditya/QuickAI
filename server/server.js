@@ -2,11 +2,15 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import { requireAuth } from '@clerk/express';
+import connectCloudinary from './configs/cloudinary.js'; // ✅ Import Cloudinary config
 
 import aiRoutes from './routes/aiRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 
 const app = express();
+
+// ✅ Connect to Cloudinary
+connectCloudinary();
 
 app.use(cors());
 app.use(express.json());
