@@ -219,106 +219,99 @@ export const removeImageBackground = async (req, res) => {
 
 
 export const removeImageObject = async (req, res) => {
-    try {
-        const { userId } = req.auth();
-        const { object } = req.body;
-        const image = req.file; // Corrected: directly access req.file
-        const plan = req.plan; 
+    try {
+        const { userId } = req.auth();
+        const { object } = req.body;
+        const image = req.file; // Multer makes req.file available here
+        const plan = req.plan; 
 
-        if (plan !== 'premium') {
-            return res.status(403).json({ success: false, message: "Image generation is a premium feature. Please upgrade your plan." });
-        }
+        if (plan !== 'premium') {
+            return res.status(403).json({ success: false, message: "Image object removal is a premium feature. Please upgrade your plan." });
+        }
 
-        if (!image) {
-          return res.status(400).json({ success: false, message: "No image file uploaded." });
-        }
-        
-        const { public_id } = await cloudinary.uploader.upload(image.path);
-        
-        fs.unlinkSync(image.path); // Clean up the temporary file
+        if (!image) {
+            return res.status(400).json({ success: false, message: "No image file uploaded." });
+        }
+        
+        const { public_id } = await cloudinary.uploader.upload(image.path);
+        
+        fs.unlinkSync(image.path); // Clean up the temporary file
 
-        const imageUrl = cloudinary.url(public_id, {
-            transformation: [{effect: `gen_remove:${object}`}],
-            resource_type: 'image'
-        })
+        const promptString = `Removed: ${object} from image`;
 
-        await sql`INSERT INTO creations (user_id, prompt, content, type)
-                  VALUES (${userId}, ${`Removed: ${object} from image`}, ${imageUrl}, 'image')`;
+        const imageUrl = cloudinary.url(public_id, {
+            transformation: [{effect: `gen_remove:${object}`}],
+            resource_type: 'image'
+        });
 
-        res.json({ success: true, content: imageUrl });
+        await sql`INSERT INTO creations (user_id, prompt, content, type)
+                  VALUES (${userId}, ${promptString}, ${imageUrl}, 'image')`;
 
-    } catch (error) {
-        console.error("Error in removeImageObject:", error);
-        res.status(500).json({ success: false, message: "Something went wrong removing the object." });
-    }
+        res.json({ success: true, content: imageUrl });
+
+    } catch (error) {
+        console.error("Error in removeImageObject:", error);
+        // Ensure temporary file is cleaned up even if an error occurs during processing
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+        res.status(500).json({ success: false, message: "Something went wrong removing the object." });
+    }
 };
 
-
-
 export const resumeReview = async (req, res) => {
-    try {
-        const { userId } = req.auth();
-        const resume = req.file; // Corrected: directly access req.file
-        const plan = req.plan; 
+    try {
+        const { userId } = req.auth();
+        const resume = req.file; // Multer makes req.file available here
+        const plan = req.plan; 
 
-        if (plan !== 'premium') {
-            return res.status(403).json({ success: false, message: "Image generation is a premium feature. Please upgrade your plan." });
-        }
+        if (plan !== 'premium') {
+            return res.status(403).json({ success: false, message: "Resume review is a premium feature. Please upgrade your plan." });
+        }
 
-        
-        if(!resume || resume.size > 5* 1024 * 1024){
-            return res.json({success: false, message: "Resume file size exceeds the limit is 5mb"})
-        }
+        if (!resume) {
+            return res.status(400).json({ success: false, message: "No resume file uploaded." });
+        }
+        
+        if (resume.size > 5 * 1024 * 1024) {
+            // Clean up temp file before returning error
+            fs.unlinkSync(resume.path); 
+            return res.status(400).json({ success: false, message: "Resume file size exceeds the limit of 5MB." });
+        }
 
-        const dataBuffer = fs.readFileSync(resume.path)
-        const pdfData = await pdf(dataBuffer)
+        const dataBuffer = fs.readFileSync(resume.path);
+        const pdfData = await pdf(dataBuffer);
 
-        const prompt = `Review the following resume and provide constructive feedback on it's strengths, weaknesses,
-        and ares of improvement. Resume Content:\n\n${pdfData.text}`
+        fs.unlinkSync(resume.path); // Clean up temp file after reading
 
+        const prompt = `Review the following resume and provide constructive feedback on its strengths, weaknesses,
+                        and areas of improvement. Resume Content:\n\n${pdfData.text}`;
 
-        const response = await AI.chat.completions.create({
-            model: "gemini-2.0-flash",
-            messages: [
-                {
-                    role: "user",
-                    content: prompt,
-                },
-            ],
-            temperature: 0.7,
-            max_tokens: 1000,
-        });
+        const response = await AI.chat.completions.create({
+            model: "gemini-2.0-flash",
+            messages: [
+                {
+                    role: "user",
+                    content: prompt,
+                },
+            ],
+            temperature: 0.7,
+            max_tokens: 1000,
+        });
 
-        const content = response.choices[0].message.content;
+        const content = response.choices[0].message.content;
 
+        await sql`INSERT INTO creations (user_id, prompt, content, type)
+                  VALUES (${userId}, 'Review the uploaded resume', ${content}, 'resume-review')`;
 
-        await sql`INSERT INTO creations (user_id, prompt, content, type)
-                  VALUES (${userId}, 'Review the uploaded resume', ${content}, 'resume-review')`;
+        res.json({ success: true, content: content });
 
-        res.json({ success: true, content: content });
-
-    } catch (error) {
-        console.error("Error in resumeReview:", error);
-        if (axios.isAxiosError(error) && error.response) {
-            const clipDropErrorData = error.response.data ? Buffer.from(error.response.data).toString('utf8') : 'Unknown error from external API';
-            console.error("ClipDrop API Error Response:", clipDropErrorData);
-
-            let message = `Image generation failed: ${error.response.statusText || 'External API Error'}.`;
-            try {
-                const parsedClipDropError = JSON.parse(clipDropErrorData);
-                if (parsedClipDropError.error) {
-                    message += ` Details: ${parsedClipDropError.error}`;
-                }
-            } catch (parseError) {
-                message += ` Raw details: ${clipDropErrorData}`;
-            }
-
-            res.status(error.response.status).json({
-                success: false,
-                message: message
-            });
-        } else {
-            res.status(500).json({ success: false, message: "Something went wrong." });
-        }
-    }
+    } catch (error) {
+        console.error("Error in resumeReview:", error);
+        // Ensure temporary file is cleaned up even if an error occurs
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+        res.status(500).json({ success: false, message: "Something went wrong during resume review." });
+    }
 };
